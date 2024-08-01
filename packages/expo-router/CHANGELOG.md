@@ -16,6 +16,7 @@
 - Added `client-only` and `server-only` dependencies. ([#29646](https://github.com/expo/expo/pull/29646) by [@EvanBacon](https://github.com/EvanBacon))
 - Add `relativeToDirectory` option to `<Link />` and imperative navigation. ([#30675](https://github.com/expo/expo/pull/30675) by [@marklawlor](https://github.com/marklawlor))
 - Add `routerOptions` prop and improved types of `<Navigator />`. ([#31289](https://github.com/expo/expo/pull/31289) by [@marklawlor](https://github.com/marklawlor))
+- Add `expo-router/headless` with new `Tabs` component
 
 ### 🐛 Bug fixes
 
