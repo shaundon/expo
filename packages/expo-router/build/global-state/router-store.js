@@ -30,6 +30,7 @@ exports.useInitializeExpoRouter = exports.useStoreRouteInfo = exports.useStoreRo
 const native_1 = require("@react-navigation/native");
 const expo_constants_1 = __importDefault(require("expo-constants"));
 const SplashScreen = __importStar(require("expo-splash-screen"));
+const fast_deep_equal_1 = __importDefault(require("fast-deep-equal"));
 const react_1 = require("react");
 const react_native_1 = require("react-native");
 const routing_1 = require("./routing");
@@ -162,7 +163,7 @@ class RouterStore {
         exports.store.rootState = state;
         exports.store.nextState = nextState;
         const nextRouteInfo = exports.store.getRouteInfo(state);
-        if (!(0, getPathFromState_1.deepEqual)(this.routeInfo, nextRouteInfo)) {
+        if (!(0, fast_deep_equal_1.default)(this.routeInfo, nextRouteInfo)) {
             exports.store.routeInfo = nextRouteInfo;
         }
     }

@@ -166,7 +166,6 @@ test('dismissAll nested', () => {
         state: {
           index: 3,
           key: expect.any(String),
-          preloadedRoutes: [],
           routeNames: ['index', 'two', 'page'],
           routes: [
             {
@@ -198,7 +197,6 @@ test('dismissAll nested', () => {
               state: {
                 index: 2,
                 key: expect.any(String),
-                preloadedRoutes: [],
                 routeNames: ['index', 'page'],
                 routes: [
                   {
@@ -286,7 +284,6 @@ test('dismissAll nested', () => {
         state: {
           index: 3,
           key: expect.any(String),
-          preloadedRoutes: [],
           routeNames: ['index', 'two', 'page'],
           routes: [
             {
@@ -318,7 +315,6 @@ test('dismissAll nested', () => {
               state: {
                 index: 0,
                 key: expect.any(String),
-                preloadedRoutes: [],
                 routeNames: ['index', 'page'],
                 routes: [
                   {
@@ -394,7 +390,6 @@ test('dismissAll nested', () => {
         state: {
           index: 0,
           key: expect.any(String),
-          preloadedRoutes: [],
           routeNames: ['index', 'two', 'page'],
           routes: [
             {

@@ -1004,7 +1004,7 @@ describe('shared routes with tabs', () => {
   }
 
   describe('tab one (default)', () => {
-    it.only('pushes post in tab one using absolute /post', async () => {
+    it('pushes post in tab one using absolute /post', async () => {
       renderSharedTabs();
       act(() => router.push('/post'));
       expect(screen).toHavePathname('/post');
