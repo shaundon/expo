@@ -83,8 +83,9 @@ export function getStateFromPath<ParamList extends object>(
   path: string,
   options?: Options<ParamList>
 ): ResultState | undefined {
+  const { allowUrlParamNormalization, ...optionsToValidate } = options ?? {};
   if (options) {
-    validatePathConfig(options);
+    validatePathConfig(optionsToValidate);
   }
 
   const expoHelpers = getExpoHelpers(path);
@@ -138,7 +139,14 @@ export function getStateFromPath<ParamList extends object>(
       });
 
     if (routes.length) {
-      return createNestedStateObject(path, routes, initialRoutes, undefined, expoHelpers.hash);
+      return createNestedStateObject(
+        path,
+        routes,
+        initialRoutes,
+        undefined,
+        expoHelpers.hash,
+        allowUrlParamNormalization
+      );
     }
 
     return undefined;
@@ -186,10 +194,10 @@ export function getStateFromPath<ParamList extends object>(
     // When handling empty path, we should only look at the root level config
     const match = configs.find(
       (config) =>
-        config.path === '' &&
+        stripGroupSegmentsFromPath(config.path) === '' &&
         config.routeNames.every(
           // Make sure that none of the parent configs have a non-empty path defined
-          (name) => !configs.find((c) => c.screen === name)?.path
+          (name) => !stripGroupSegmentsFromPath(configs.find((c) => c.screen === name)?.path || '')
         )
     );
 
@@ -199,7 +207,8 @@ export function getStateFromPath<ParamList extends object>(
         match.routeNames.map((name) => ({ name })),
         initialRoutes,
         configs,
-        expoHelpers.hash
+        expoHelpers.hash,
+        allowUrlParamNormalization
       );
     }
 
@@ -231,7 +240,8 @@ export function getStateFromPath<ParamList extends object>(
       routes,
       initialRoutes,
       configs,
-      expoHelpers.hash
+      expoHelpers.hash,
+      allowUrlParamNormalization
     );
     remaining = remainingPath;
     result = current;
@@ -269,7 +279,7 @@ const matchAgainstConfigs = (remaining: string, configs: RouteConfig[]) => {
         matchedParams: Record<string, Record<string, string>>; // The extracted params
       }>(
         (acc, p, index) => {
-          if (!p.startsWith(':')) {
+          if (!p.startsWith(':') && !p.startsWith('*')) {
             return acc;
           }
 
@@ -277,22 +287,35 @@ const matchAgainstConfigs = (remaining: string, configs: RouteConfig[]) => {
           acc.pos += 1;
 
           // Start Fork
-          // Expo Router's regex is slightly different and may cause an undefined match
-          if (!match![(acc.pos + 1) * 2]) return acc;
-          // End Fork
+          // const decodedParamSegment = decodeURIComponent(
+          //   // The param segments appear every second item starting from 2 in the regex match result
+          //   match![(acc.pos + 1) * 2]
+          //     // Remove trailing slash
+          //     .replace(/\/$/, '')
+          // );
 
-          const decodedParamSegment = decodeURIComponent(
-            // The param segments appear every second item starting from 2 in the regex match result
-            match![(acc.pos + 1) * 2]
-              // Remove trailing slash
-              .replace(/\/$/, '')
-          );
+          // Object.assign(acc.matchedParams, {
+          //   [p]: Object.assign(acc.matchedParams[p] || {}, {
+          //     [index]: decodedParamSegment,
+          //   }),
+          // });
+
+          // Expo Router's regex is slightly different and may cause an undefined match
+          // The param segments appear every second item starting from 2 in the regex match result
+          let matchedParam = match![(acc.pos + 1) * 2];
+          if (!matchedParam) return acc;
+
+          // Remove trailing slash
+          matchedParam = matchedParam.replace(/\/$/, '');
+
+          const decodedParamSegment = decodeURIComponent(matchedParam);
 
           Object.assign(acc.matchedParams, {
             [p]: Object.assign(acc.matchedParams[p] || {}, {
               [index]: decodedParamSegment,
             }),
           });
+          //  End Fork
 
           return acc;
         },
@@ -319,7 +342,7 @@ const matchAgainstConfigs = (remaining: string, configs: RouteConfig[]) => {
         const params = normalizedPath
           ?.split('/')
           .reduce<Record<string, unknown>>((acc, p, index) => {
-            if (!p.startsWith(':')) {
+            if (!p.startsWith(':') && !p.startsWith('*')) {
               return acc;
             }
 
@@ -329,7 +352,7 @@ const matchAgainstConfigs = (remaining: string, configs: RouteConfig[]) => {
             const value = matchedParams[p]?.[index + offset];
 
             if (value) {
-              const key = p.replace(/^:/, '').replace(/\?$/, '');
+              const key = p.replace(/^[:*]/, '').replace(/\?$/, '');
               acc[key] = routeConfig?.parse?.[key] ? routeConfig.parse[key](value) : value;
             }
 
@@ -604,8 +627,9 @@ const createNestedStateObject = (
   routes: ParsedRoute[],
   initialRoutes: InitialRouteConfig[],
   flatConfig?: RouteConfig[],
-  // Start fork
-  hash?: string
+  // Start Fork
+  hash?: string,
+  allowUrlParamNormalization?: boolean
   // End fork
 ) => {
   let route = routes.shift() as ParsedRoute;
@@ -651,7 +675,7 @@ const createNestedStateObject = (
   if (params) {
     // Start fork
     // route.params = { ...route.params, ...params };
-    forks.mutateRouteParams(route, params);
+    forks.mutateRouteParams(route, params, { allowUrlParamNormalization });
     // End fork
   }
 

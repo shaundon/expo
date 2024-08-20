@@ -287,6 +287,20 @@ it(`adds dynamic route params from all levels of the path`, () => {
   });
 });
 
+it(`handles not-found routes`, () => {
+  expect(getStateFromPath('/missing-page', getMockConfig(['+not-found', 'index']))).toEqual({
+    routes: [
+      {
+        name: '+not-found',
+        params: {
+          'not-found': 'missing-page',
+        },
+        path: '/missing-page',
+      },
+    ],
+  });
+});
+
 it(`handles query params`, () => {
   expect(
     getStateFromPath('/?test=true&hello=world&array=1&array=2', getMockConfig(['index.tsx']))

@@ -1,19 +1,24 @@
 import type { ParsedRoute } from './getStateFromPath';
 
-export function mutateRouteParams(route: ParsedRoute, params: object) {
+export function mutateRouteParams(
+  route: ParsedRoute,
+  params: object,
+  { allowUrlParamNormalization = false } = {}
+) {
   route.params = Object.assign(Object.create(null), route.params) as Record<string, any>;
   for (const [name, value] of Object.entries(params)) {
     if (route.params?.[name]) {
-      if (process.env.NODE_ENV !== 'production') {
-        console.warn(
-          `Route '/${route.name}' with param '${name}' was specified both in the path and as a param, removing from path`
-        );
+      if (allowUrlParamNormalization) {
+        route.params[name] = value;
+      } else {
+        if (process.env.NODE_ENV !== 'production') {
+          console.warn(
+            `Route '/${route.name}' with param '${name}' was specified both in the path and as a param, removing from path`
+          );
+        }
       }
-    }
-
-    if (!route.params?.[name]) {
+    } else {
       route.params[name] = value;
-      continue;
     }
   }
 

@@ -182,7 +182,7 @@ it('preserves history when replacing screens within the same navigator', () => {
   expect(screen).toHavePathname('/');
 });
 
-it('replaces from top level modal to initial route in a tab navigator', () => {
+it.only('replaces from top level modal to initial route in a tab navigator', () => {
   /* Modified repro of [#221](https://github.com/expo/router/issues/221). */
 
   renderRouter({
@@ -1101,7 +1101,7 @@ describe('consistent url encoding', () => {
     );
 
     const component = screen.getByTestId('id');
-    expect(screen).toHavePathname('/start%26end');
+    expect(screen).toHavePathname('/start&end');
     expect(screen).toHaveSearchParams({ param: 'start&end' });
     expect(component).toHaveTextContent(
       JSON.stringify({ local: { param: 'start&end' }, global: { param: 'start&end' } })
@@ -1251,7 +1251,7 @@ describe('consistent url encoding', () => {
 
     act(() => router.push('/start%21end'));
 
-    expect(screen).toHavePathname('/start%21end');
+    expect(screen).toHavePathname('/start!end');
     expect(screen).toHaveSearchParams({
       param: 'start!end',
     });

@@ -2,6 +2,13 @@ import { PathConfig, PathConfigMap, validatePathConfig } from '@react-navigation
 import type { NavigationState, PartialState, Route } from '@react-navigation/routers';
 import * as queryString from 'query-string';
 
+import {
+  matchDeepDynamicRouteName,
+  matchDynamicName,
+  matchGroupName,
+  testNotFound,
+} from '../matchers';
+
 type Options<ParamList extends object> = {
   path?: string;
   initialRouteName?: string;
@@ -21,6 +28,11 @@ type ConfigItem = {
   pattern?: string;
   stringify?: StringifyConfig;
   screens?: Record<string, ConfigItem>;
+
+  // Start Fork
+  // Used as fallback for groups
+  initialRouteName?: string;
+  // End Fork
 };
 
 const getActiveRoute = (state: State): { name: string; params?: object } => {
@@ -93,7 +105,6 @@ export function getPathDataFromState<ParamList extends object>(
   let current: State | undefined = state;
 
   const allParams: Record<string, any> = {};
-  let hash: string | undefined;
 
   while (current) {
     let index = typeof current.index === 'number' ? current.index : 0;
@@ -118,17 +129,6 @@ export function getPathDataFromState<ParamList extends object>(
       nestedRouteNames.push(route.name);
 
       if (route.params) {
-        // Start Fork
-        if (route.params['#'] !== undefined) {
-          // route.params is frozen, so we need to clone it
-          const { '#': _hash, ...params } = route.params as Record<string, any>;
-          hash = _hash;
-          // route.params is readonly, so we need to make it a new object
-          // But we cannot change its identity as its used below
-          Object.assign(route, { params });
-        }
-        // End Fork
-
         const stringify = currentOptions[route.name]?.stringify;
 
         const currentParams = Object.fromEntries(
@@ -148,9 +148,12 @@ export function getPathDataFromState<ParamList extends object>(
           // End Fork
         );
 
-        if (pattern) {
-          Object.assign(allParams, currentParams);
-        }
+        // Start Fork - We always assign params, as non pattern routes may still have query params
+        // if (pattern) {
+        //   Object.assign(allParams, currentParams);
+        // }
+        Object.assign(allParams, currentParams);
+        // End Fork
 
         if (focusedRoute === route) {
           // If this is the focused route, keep the params for later use
@@ -201,8 +204,23 @@ export function getPathDataFromState<ParamList extends object>(
     if (currentOptions[route.name] !== undefined) {
       path += pattern
         .split('/')
-        .map((p) => {
+        .map((p, index, segments) => {
           const name = getParamName(p);
+
+          // Start Fork
+          if (preserveDynamicRoutes) {
+            if (p.startsWith(':')) {
+              return `[${getParamName(p)}]`;
+            } else if (p.startsWith('*')) {
+              if (name === 'not-found') {
+                return name;
+              }
+              return `[...${getParamName(p)}]`;
+            } else if (p.startsWith('*')) {
+              return matchDeepDynamicRouteName(p) ?? p;
+            }
+          }
+          // End Fork
 
           // We don't know what to show for wildcard patterns
           // Showing the route name seems ok, though whatever we show here will be incorrect
@@ -212,7 +230,7 @@ export function getPathDataFromState<ParamList extends object>(
           }
 
           // If the path has a pattern for a param, put the param in the path
-          if (p.startsWith(':')) {
+          if (p.startsWith(':') || p.startsWith('*')) {
             const value = allParams[name];
 
             if (value === undefined && p.endsWith('?')) {
@@ -227,7 +245,27 @@ export function getPathDataFromState<ParamList extends object>(
             );
           }
 
-          return encodeURIComponent(p);
+          if (!preserveGroups && matchGroupName(p) != null) {
+            // When the last part is a group it could be a shared URL
+            // if the route has an initialRouteName defined, then we should
+            // use that as the component path as we can assume it will be shown.
+            if (segments.length - 1 === index) {
+              const initialRouteName = configs[route.name]?.initialRouteName;
+              if (initialRouteName) {
+                // Return an empty string if the init route is ambiguous.
+                if (segmentMatchesConvention(initialRouteName)) {
+                  return '';
+                }
+                return encodeURIComponentPreservingBrackets(initialRouteName);
+              }
+            }
+            return '';
+          }
+
+          // Start Fork
+          // return encodeURIComponent(p);
+          return encodeURIComponentPreservingBrackets(p);
+          // End Fork
         })
         .join('/');
     } else {
@@ -271,9 +309,8 @@ export function getPathDataFromState<ParamList extends object>(
     path = joinPaths(options.path, path);
   }
 
-  if (hash) {
-    allParams['#'] = hash;
-    path += `#${hash}`;
+  if (allParams['#']) {
+    path += `#${allParams['#']}`;
   }
 
   path = appendBaseUrl(path);
@@ -301,7 +338,10 @@ export function decodeParams(params: Record<string, string>) {
   return parsed;
 }
 
-const getParamName = (pattern: string) => pattern.replace(/^:/, '').replace(/\?$/, '');
+// START FORK
+// const getParamName = (pattern: string) => pattern.replace(/^:/, '').replace(/\?$/, '');
+const getParamName = (pattern: string) => pattern.replace(/^[:*]/, '').replace(/\?$/, '');
+// END FORK
 
 const joinPaths = (...paths: string[]): string =>
   ([] as string[])
@@ -363,4 +403,49 @@ export function appendBaseUrl(
     }
   }
   return path;
+}
+
+function segmentMatchesConvention(segment: string): boolean {
+  return (
+    segment === 'index' ||
+    matchDynamicName(segment) != null ||
+    matchGroupName(segment) != null ||
+    matchDeepDynamicRouteName(segment) != null
+  );
+}
+
+function encodeURIComponentPreservingBrackets(str: string) {
+  return encodeURIComponent(str).replace(/%5B/g, '[').replace(/%5D/g, ']');
+}
+
+/** Given a set of query params and a pattern with possible conventions, collapse the conventions and return the remaining params. */
+function getParamsWithConventionsCollapsed(
+  pattern: string,
+  routeName: string,
+  params: Record<string, string>
+): Record<string, string> {
+  const processedParams = { ...params };
+
+  // Remove the params present in the pattern since we'll only use the rest for query string
+
+  const segments = pattern.split('/');
+
+  // Dynamic Routes
+  segments
+    .filter((segment) => segment.startsWith(':'))
+    .forEach((segment) => {
+      const name = getParamName(segment);
+      delete processedParams[name];
+    });
+
+  // Deep Dynamic Routes
+  if (segments.some((segment) => segment.startsWith('*'))) {
+    // NOTE(EvanBacon): Drop the param name matching the wildcard route name -- this is specific to Expo Router.
+    const name = testNotFound(routeName)
+      ? 'not-found'
+      : matchDeepDynamicRouteName(routeName) ?? routeName;
+    delete processedParams[name];
+  }
+
+  return processedParams;
 }

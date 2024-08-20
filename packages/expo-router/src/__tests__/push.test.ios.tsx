@@ -355,6 +355,7 @@ it('targets the correct Stack when pushing to a nested layout', () => {
   expect(store.rootStateSnapshot()).toStrictEqual({
     index: 3,
     key: expect.any(String),
+    preloadedRoutes: [],
     routeNames: ['a', 'b', 'one', '_sitemap', '+not-found'],
     routes: [
       {
@@ -380,6 +381,7 @@ it('targets the correct Stack when pushing to a nested layout', () => {
         state: {
           index: 2,
           key: expect.any(String),
+          preloadedRoutes: [],
           routeNames: ['index', 'two', 'page'],
           routes: [
             {
@@ -405,7 +407,7 @@ it('targets the correct Stack when pushing to a nested layout', () => {
               state: {
                 index: 1,
                 key: expect.any(String),
-                routeNames: ['index', 'page'],
+                preloadedRoutes: [],
                 routes: [
                   {
                     key: expect.any(String),
