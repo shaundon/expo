@@ -3,16 +3,18 @@ import { TriggerMap } from './common';
 export type ExpoTabRouterOptions = RNTabRouterOptions & {
     triggerMap: TriggerMap;
 };
+export type ExpoTabsResetValue = 'always' | 'onFocus' | 'never';
 export type ExpoTabActionType = RNTabActionType | CommonNavigationAction | {
-    type: 'SWITCH_TABS';
+    type: 'JUMP_TO';
     source?: string;
     target?: string;
     payload: {
         name: string;
-        reset?: 'always' | 'onFocus' | 'never';
+        reset?: ExpoTabsResetValue;
+        params?: object | undefined;
     };
 };
-export declare function ExpoTabRouter({ triggerMap, ...options }: ExpoTabRouterOptions): Router<TabNavigationState<ParamListBase>, {
+export declare function ExpoTabRouter({ triggerMap, ...options }: ExpoTabRouterOptions): Router<TabNavigationState<ParamListBase>, RNTabActionType | {
     type: "GO_BACK";
     source?: string | undefined;
     target?: string | undefined;
@@ -95,13 +97,14 @@ export declare function ExpoTabRouter({ triggerMap, ...options }: ExpoTabRouterO
     };
     source?: string | undefined;
     target?: string | undefined;
-} | RNTabActionType | {
-    type: "SWITCH_TABS";
+} | {
+    type: "JUMP_TO";
     source?: string | undefined;
     target?: string | undefined;
     payload: {
         name: string;
-        reset?: "onFocus" | "never" | "always" | undefined;
+        reset?: ExpoTabsResetValue | undefined;
+        params?: object | undefined;
     };
 }>;
 //# sourceMappingURL=TabRouter.d.ts.map
