@@ -40,6 +40,7 @@ it('stacks should always push a new route', () => {
   expect(store.rootStateSnapshot()).toStrictEqual({
     index: 1,
     key: expect.any(String),
+    preloadedRoutes: [],
     routeNames: ['index', '(group)', '_sitemap', '+not-found'],
     routes: [
       {
@@ -64,6 +65,7 @@ it('stacks should always push a new route', () => {
         state: {
           index: 3,
           key: expect.any(String),
+          preloadedRoutes: [],
           routeNames: ['user/[id]', 'post/[id]'],
           routes: [
             {
@@ -108,6 +110,7 @@ it('stacks should always push a new route', () => {
               state: {
                 index: 1,
                 key: expect.any(String),
+                preloadedRoutes: [],
                 routeNames: ['index'],
                 routes: [
                   {
@@ -156,7 +159,7 @@ it('can push & replace with nested Slots', async () => {
   expect(screen.getByTestId('index')).toBeOnTheScreen();
 });
 
-it('should navigate as expected when nested Stacks & Tabs', async () => {
+it.only('should navigate as expected when nested Stacks & Tabs', async () => {
   renderRouter({
     index: () => <Text testID="index" />,
     'apple/_layout': () => <Stack />,

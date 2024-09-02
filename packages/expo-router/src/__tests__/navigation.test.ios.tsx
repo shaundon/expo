@@ -182,7 +182,7 @@ it('preserves history when replacing screens within the same navigator', () => {
   expect(screen).toHavePathname('/');
 });
 
-it.only('replaces from top level modal to initial route in a tab navigator', () => {
+it('replaces from top level modal to initial route in a tab navigator', () => {
   /* Modified repro of [#221](https://github.com/expo/router/issues/221). */
 
   renderRouter({

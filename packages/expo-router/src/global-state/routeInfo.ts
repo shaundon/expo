@@ -37,7 +37,7 @@ export function reconstructState(
     segments.pop();
   }
 
-  let path = `/${segments.join('/')}`;
+  let path = `/${segments.filter(Boolean).join('/')}`;
   const query = queryString.stringify(allParams, { sort: false });
 
   if (query) {

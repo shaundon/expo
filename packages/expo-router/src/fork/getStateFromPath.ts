@@ -283,6 +283,8 @@ const matchAgainstConfigs = (remaining: string, configs: RouteConfig[]) => {
             return acc;
           }
 
+          if (p === '*') return acc;
+
           // Path parameter so increment position for the segment
           acc.pos += 1;
 
