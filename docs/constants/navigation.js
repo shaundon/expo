@@ -339,6 +339,7 @@ const general = [
     makePage('eas-update/getting-started.mdx'),
     makeGroup('Previews', [
       makePage('eas-update/develop-faster.mdx'),
+      makePage('eas-update/expo-dev-client.mdx'),
       makePage('eas-update/github-actions.mdx'),
     ]),
     makeGroup('Deployment', [
@@ -348,8 +349,6 @@ const general = [
     ]),
     makeGroup('Troubleshooting', [
       makePage('eas-update/debug.mdx'),
-      makePage('eas-update/expo-dev-client.mdx'),
-      makePage('eas-update/build-locally.mdx'),
       makePage('eas-update/error-recovery.mdx'),
     ]),
     makeGroup('Concepts', [
@@ -358,7 +357,6 @@ const general = [
       makePage('eas-update/runtime-versions.mdx'),
     ]),
     makeGroup('Reference', [
-      makePage('eas-update/faq.mdx'),
       makePage('eas-update/optimize-assets.mdx'),
       makePage('eas-update/environment-variables.mdx'),
       makePage('eas-update/code-signing.mdx'),
@@ -368,6 +366,8 @@ const general = [
       makePage('eas-update/migrate-from-classic-updates.mdx'),
       makePage('eas-update/codepush.mdx'),
       makePage('eas-update/updating-your-app.mdx'),
+      makePage('eas-update/build-locally.mdx'),
+      makePage('eas-update/faq.mdx'),
     ]),
   ]),
   makeSection('EAS Metadata', [
