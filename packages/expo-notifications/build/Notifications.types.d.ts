@@ -254,27 +254,30 @@ export interface TimeIntervalTriggerInput {
 }
 /**
  * A trigger that will cause the notification to be delivered once per day.
+ * > **Note:** This trigger always has `repeats` set to true.
  */
 export interface DailyTriggerInput {
     channelId?: string;
     hour: number;
     minute: number;
-    repeats: true;
+    repeats?: true;
 }
 /**
  * A trigger that will cause the notification to be delivered once every week.
  * > **Note:** Weekdays are specified with a number from `1` through `7`, with `1` indicating Sunday.
+ * > **Note:** This trigger always has `repeats` set to true.
  */
 export interface WeeklyTriggerInput {
     channelId?: string;
     weekday: number;
     hour: number;
     minute: number;
-    repeats: true;
+    repeats?: true;
 }
 /**
  * A trigger that will cause the notification to be delivered once every year.
  * > **Note:** all properties are specified in JavaScript Date's ranges.
+ * > **Note:** This trigger always has `repeats` set to true.
  */
 export interface YearlyTriggerInput {
     channelId?: string;
@@ -282,7 +285,7 @@ export interface YearlyTriggerInput {
     month: number;
     hour: number;
     minute: number;
-    repeats: true;
+    repeats?: true;
 }
 /**
  * A trigger that will cause the notification to be delivered once at the specified `Date`.

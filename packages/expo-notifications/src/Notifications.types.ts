@@ -289,29 +289,32 @@ export interface TimeIntervalTriggerInput {
 
 /**
  * A trigger that will cause the notification to be delivered once per day.
+ * > **Note:** This trigger always has `repeats` set to true.
  */
 export interface DailyTriggerInput {
   channelId?: string;
   hour: number;
   minute: number;
-  repeats: true;
+  repeats?: true;
 }
 
 /**
  * A trigger that will cause the notification to be delivered once every week.
  * > **Note:** Weekdays are specified with a number from `1` through `7`, with `1` indicating Sunday.
+ * > **Note:** This trigger always has `repeats` set to true.
  */
 export interface WeeklyTriggerInput {
   channelId?: string;
   weekday: number;
   hour: number;
   minute: number;
-  repeats: true;
+  repeats?: true;
 }
 
 /**
  * A trigger that will cause the notification to be delivered once every year.
  * > **Note:** all properties are specified in JavaScript Date's ranges.
+ * > **Note:** This trigger always has `repeats` set to true.
  */
 export interface YearlyTriggerInput {
   channelId?: string;
@@ -319,7 +322,7 @@ export interface YearlyTriggerInput {
   month: number;
   hour: number;
   minute: number;
-  repeats: true;
+  repeats?: true;
 }
 
 /**
@@ -482,7 +485,7 @@ export interface NotificationRequest {
   trigger: NotificationTrigger;
 }
 
-// TODO(simek): asses if we can base this type on `NotificationContent`, since most of the fields looks like repetition
+// TODO(simek): assess if we can base this type on `NotificationContent`, since most of the fields looks like repetition
 /**
  * An object represents notification content that you pass in to `presentNotificationAsync` or as a part of `NotificationRequestInput`.
  */
