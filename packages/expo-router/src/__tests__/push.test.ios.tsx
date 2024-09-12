@@ -159,7 +159,7 @@ it('can push & replace with nested Slots', async () => {
   expect(screen.getByTestId('index')).toBeOnTheScreen();
 });
 
-it.only('should navigate as expected when nested Stacks & Tabs', async () => {
+it('should navigate as expected when nested Stacks & Tabs', async () => {
   renderRouter({
     index: () => <Text testID="index" />,
     'apple/_layout': () => <Stack />,
@@ -224,6 +224,7 @@ it('works in a nested layout Stack->Tab->Stack', () => {
   expect(store.rootStateSnapshot()).toStrictEqual({
     index: 2,
     key: expect.any(String),
+    preloadedRoutes: [],
     routeNames: ['index', '(tabs)', 'd', '_sitemap', '+not-found'],
     routes: [
       {
@@ -279,6 +280,7 @@ it('works in a nested layout Stack->Tab->Stack', () => {
               state: {
                 index: 2,
                 key: expect.any(String),
+                preloadedRoutes: [],
                 routeNames: ['one', 'two'],
                 routes: [
                   {
@@ -411,6 +413,7 @@ it('targets the correct Stack when pushing to a nested layout', () => {
                 index: 1,
                 key: expect.any(String),
                 preloadedRoutes: [],
+                routeNames: ['index', 'page'],
                 routes: [
                   {
                     key: expect.any(String),

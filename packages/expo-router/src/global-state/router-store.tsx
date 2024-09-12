@@ -8,7 +8,6 @@ import equal from 'fast-deep-equal';
 import { useSyncExternalStore, useMemo, ComponentType, Fragment } from 'react';
 import { Platform } from 'react-native';
 
-import { reconstructState } from './routeInfo';
 import {
   canGoBack,
   canDismiss,
@@ -25,11 +24,13 @@ import { getSortedRoutes } from './sort-routes';
 import { UrlObject, getRouteInfoFromState } from '../LocationProvider';
 import { RouteNode } from '../Route';
 import { getPathDataFromState, getPathFromState } from '../fork/getPathFromState';
-import { ResultState } from '../fork/getStateFromPath';
+// import { ResultState } from '../fork/getStateFromPath';
 import { ExpoLinkingOptions, LinkingConfigOptions, getLinkingConfig } from '../getLinkingConfig';
 import { getRoutes } from '../getRoutes';
 import { RequireContext } from '../types';
 import { getQualifiedRouteComponent } from '../useScreens';
+
+type ResultState = any;
 
 /**
  * This is the global state for the router. It is used to keep track of the current route, and to provide a way to navigate to other routes.
@@ -184,17 +185,12 @@ export class RouterStore {
   getRouteInfo(state: ResultState) {
     return getRouteInfoFromState(
       (state: Parameters<typeof getPathFromState>[0], asPath: boolean) => {
-        state = reconstructState(state, this.linking!.getStateFromPath!, {
-          screens: {},
-          ...this.linking?.config,
-          allowUrlParamNormalization: true,
-        })!;
-
         return getPathDataFromState(state, {
           screens: {},
           ...this.linking?.config,
           preserveDynamicRoutes: asPath,
           preserveGroups: asPath,
+          shouldEncodeURISegment: false,
         });
       },
       state

@@ -3,49 +3,33 @@ import type { InitialState, NavigationState, PartialState } from '@react-navigat
 import escape from 'escape-string-regexp';
 
 import { findFocusedRoute } from './findFocusedRoute';
-import * as forks from './getStateFromPath-forks';
-import { RouteNode } from '../Route';
+import type { ExpoOptions, ExpoRouteConfig } from './getStateFromPath-forks';
+import * as expo from './getStateFromPath-forks';
 import { RouterStore } from '../global-state/router-store';
-import { matchGroupName, stripGroupSegmentsFromPath } from '../matchers';
 
-type Options<ParamList extends object> = {
+export type Options<ParamList extends object> = ExpoOptions & {
   path?: string;
   initialRouteName?: string;
   screens: PathConfigMap<ParamList>;
-
-  // Start Fork
-  allowUrlParamNormalization?: boolean;
-  // End Fork
 };
 
 type ParseConfig = Record<string, (value: string) => any>;
 
-type RouteConfig = {
-  type: 'layout' | 'static' | 'dynamic';
-  isInitial?: boolean;
+export type RouteConfig = ExpoRouteConfig & {
   screen: string;
   regex?: RegExp;
   path: string;
   pattern: string;
   routeNames: string[];
   parse?: ParseConfig;
-
-  // Start fork
-  expandedRouteNames: string[];
-  userReadableName: string;
-  _route?: RouteNode;
-  isIndex: boolean;
-  hasChildren: boolean;
-  parts: string[];
-  // End fork
 };
 
-type InitialRouteConfig = {
+export type InitialRouteConfig = {
   initialRouteName: string;
   parentScreens: string[];
 };
 
-export type ResultState = PartialState<NavigationState> & {
+type ResultState = PartialState<NavigationState> & {
   state?: ResultState;
 };
 
@@ -53,6 +37,12 @@ export type ParsedRoute = {
   name: string;
   path?: string;
   params?: Record<string, any> | undefined;
+};
+
+type ConfigResources = {
+  initialRoutes: InitialRouteConfig[];
+  configs: RouteConfig[];
+  configWithRegexes: RouteConfig[];
 };
 
 /**
@@ -77,35 +67,27 @@ export type ParsedRoute = {
  * @param options Extra options to fine-tune how to parse the path.
  */
 export function getStateFromPath<ParamList extends object>(
-  // Start Fork
+  // START FORK
   this: RouterStore | undefined | void,
-  // End Fork
+  // END FORK
   path: string,
   options?: Options<ParamList>
 ): ResultState | undefined {
-  const { allowUrlParamNormalization, ...optionsToValidate } = options ?? {};
-  if (options) {
-    validatePathConfig(optionsToValidate);
-  }
-
-  const expoHelpers = getExpoHelpers(path);
-
-  if (!expoHelpers) {
-    return;
-  }
-
-  const initialRoutes: InitialRouteConfig[] = [];
-
-  if (options?.initialRouteName) {
-    initialRoutes.push({
-      initialRouteName: options.initialRouteName,
-      parentScreens: [],
-    });
-  }
+  const { initialRoutes, configs, configWithRegexes } = getConfigResources(
+    options,
+    this?.routeInfo?.segments
+  );
 
   const screens = options?.screens;
 
-  let remaining = expoHelpers?.nonstandardPathname
+  // START FORK
+  const expoPath = expo.getUrlWithReactNavigationConcessions(path);
+  // END FORK
+
+  // START FORK
+  let remaining = expoPath.nonstandardPathname
+    // let remaining = path
+    // END FORK
     .replace(/\/+/g, '/') // Replace multiple slash (//) with single ones
     .replace(/^\//, '') // Remove extra leading slash
     .replace(/\?.*$/, ''); // Remove query params which we will handle later
@@ -139,29 +121,187 @@ export function getStateFromPath<ParamList extends object>(
       });
 
     if (routes.length) {
+      return createNestedStateObject(expoPath, routes, initialRoutes, [], expoPath.url.hash);
+    }
+
+    return undefined;
+  }
+
+  if (remaining === '/') {
+    // We need to add special handling of empty path so navigation to empty path also works
+    // When handling empty path, we should only look at the root level config
+    // START FORK
+    const match = expo.matchForEmptyPath(configWithRegexes);
+    // const match = configs.find(
+    //   (config) =>
+    //     config.path === '' &&
+    //     config.routeNames.every(
+    //       // Make sure that none of the parent configs have a non-empty path defined
+    //       (name) => !configs.find((c) => c.screen === name)?.path
+    //     )
+    // );
+    // END FORK
+
+    if (match) {
       return createNestedStateObject(
-        path,
-        routes,
+        expoPath,
+        match.routeNames.map((name) => ({ name })),
         initialRoutes,
-        undefined,
-        expoHelpers.hash,
-        allowUrlParamNormalization
+        configs,
+        expoPath.url.hash
       );
     }
 
     return undefined;
   }
 
+  let result: PartialState<NavigationState> | undefined;
+  let current: PartialState<NavigationState> | undefined;
+
+  // We match the whole path against the regex instead of segments
+  // This makes sure matches such as wildcard will catch any unmatched routes, even if nested
+  const { routes, remainingPath } = matchAgainstConfigs(remaining, configWithRegexes);
+
+  if (routes !== undefined) {
+    // This will always be empty if full path matched
+    current = createNestedStateObject(expoPath, routes, initialRoutes, configs, expoPath.url.hash);
+    remaining = remainingPath;
+    result = current;
+  }
+
+  if (current == null || result == null) {
+    return undefined;
+  }
+
+  return result;
+}
+
+/**
+ * Reference to the last used config resources. This is used to avoid recomputing the config resources when the options are the same.
+ */
+let cachedConfigResources: [Options<object> | undefined, ConfigResources] = [
+  undefined,
+  prepareConfigResources(),
+];
+
+function getConfigResources<ParamList extends object>(
+  options: Options<ParamList> | undefined,
+  // START FORK
+  previousSegments?: string[]
+  // END FORK
+) {
+  // START FORK - We need to disable this caching as our configs can change based upon the current state
+  // if (cachedConfigResources[0] !== options) {
+  //   console.log(previousSegments);
+  cachedConfigResources = [options, prepareConfigResources(options, previousSegments)];
+  // }
+  // END FORK FORK
+
+  return cachedConfigResources[1];
+}
+
+function prepareConfigResources(options?: Options<object>, previousSegments?: string[]) {
+  if (options) {
+    validatePathConfig(options);
+  }
+
+  const initialRoutes = getInitialRoutes(options);
+
+  const configs = getNormalizedConfigs(initialRoutes, options?.screens, previousSegments);
+
+  checkForDuplicatedConfigs(configs);
+
+  const configWithRegexes = getConfigsWithRegexes(configs);
+
+  return {
+    initialRoutes,
+    configs,
+    configWithRegexes,
+  };
+}
+
+function getInitialRoutes(options?: Options<object>) {
+  const initialRoutes: InitialRouteConfig[] = [];
+
+  if (options?.initialRouteName) {
+    initialRoutes.push({
+      initialRouteName: options.initialRouteName,
+      parentScreens: [],
+    });
+  }
+
+  return initialRoutes;
+}
+
+function getNormalizedConfigs(
+  initialRoutes: InitialRouteConfig[],
+  screens: PathConfigMap<object> = {},
+  // START FORK
+  previousSegments?: string[]
+  // END FORK
+) {
   // Create a normalized configs array which will be easier to use
-  const configs = ([] as RouteConfig[])
+  return ([] as RouteConfig[])
     .concat(
       ...Object.keys(screens).map((key) =>
         createNormalizedConfigs(key, screens as PathConfigMap<object>, [], initialRoutes, [])
       )
     )
-    .sort(getSortConfigsFn(this?.routeInfo?.segments));
-  // End Fork
+    .map(expo.appendIsInitial(initialRoutes))
+    .sort(expo.getRouteConfigSorter(previousSegments));
+  // .sort((a, b) => {
+  //   // Sort config so that:
+  //   // - the most exhaustive ones are always at the beginning
+  //   // - patterns with wildcard are always at the end
 
+  //   // If 2 patterns are same, move the one with less route names up
+  //   // This is an error state, so it's only useful for consistent error messages
+  //   if (a.pattern === b.pattern) {
+  //     return b.routeNames.join('>').localeCompare(a.routeNames.join('>'));
+  //   }
+
+  //   // If one of the patterns starts with the other, it's more exhaustive
+  //   // So move it up
+  //   if (a.pattern.startsWith(b.pattern)) {
+  //     return -1;
+  //   }
+
+  //   if (b.pattern.startsWith(a.pattern)) {
+  //     return 1;
+  //   }
+
+  //   const aParts = a.pattern.split('/');
+  //   const bParts = b.pattern.split('/');
+
+  //   for (let i = 0; i < Math.max(aParts.length, bParts.length); i++) {
+  //     // if b is longer, b get higher priority
+  //     if (aParts[i] == null) {
+  //       return 1;
+  //     }
+  //     // if a is longer, a get higher priority
+  //     if (bParts[i] == null) {
+  //       return -1;
+  //     }
+  //     const aWildCard = aParts[i] === '*' || aParts[i].startsWith(':');
+  //     const bWildCard = bParts[i] === '*' || bParts[i].startsWith(':');
+  //     // if both are wildcard we compare next component
+  //     if (aWildCard && bWildCard) {
+  //       continue;
+  //     }
+  //     // if only a is wild card, b get higher priority
+  //     if (aWildCard) {
+  //       return 1;
+  //     }
+  //     // if only b is wild card, a get higher priority
+  //     if (bWildCard) {
+  //       return -1;
+  //     }
+  //   }
+  //   return bParts.length - aParts.length;
+  // });
+}
+
+function checkForDuplicatedConfigs(configs: RouteConfig[]) {
   // Check for duplicate patterns in the config
   configs.reduce<Record<string, RouteConfig>>((acc, config) => {
     if (acc[config.pattern]) {
@@ -188,70 +328,17 @@ export function getStateFromPath<ParamList extends object>(
       [config.pattern]: config,
     });
   }, {});
+}
 
-  if (remaining === '/') {
-    // We need to add special handling of empty path so navigation to empty path also works
-    // When handling empty path, we should only look at the root level config
-    const match = configs.find(
-      (config) =>
-        stripGroupSegmentsFromPath(config.path) === '' &&
-        config.routeNames.every(
-          // Make sure that none of the parent configs have a non-empty path defined
-          (name) => !stripGroupSegmentsFromPath(configs.find((c) => c.screen === name)?.path || '')
-        )
-    );
-
-    if (match) {
-      return createNestedStateObject(
-        expoHelpers.cleanPath,
-        match.routeNames.map((name) => ({ name })),
-        initialRoutes,
-        configs,
-        expoHelpers.hash,
-        allowUrlParamNormalization
-      );
-    }
-
-    return undefined;
-  }
-
-  let result: PartialState<NavigationState> | undefined;
-  let current: PartialState<NavigationState> | undefined;
-
-  // We match the whole path against the regex instead of segments
-  // This makes sure matches such as wildcard will catch any unmatched routes, even if nested
-  const { routes, remainingPath } = matchAgainstConfigs(
-    remaining,
-    // Start Fork
-    // Our forked configs will already have the '$' suffix
-    // configs.map((c) => ({
-    //   ...c,
-    //   // Add `$` to the regex to make sure it matches till end of the path and not just beginning
-    //   regex: c.regex ? new RegExp(c.regex.source + '$') : undefined,
-    // }))
-    configs
-    // End Fork
-  );
-
-  if (routes !== undefined) {
-    // This will always be empty if full path matched
-    current = createNestedStateObject(
-      expoHelpers.cleanPath,
-      routes,
-      initialRoutes,
-      configs,
-      expoHelpers.hash,
-      allowUrlParamNormalization
-    );
-    remaining = remainingPath;
-    result = current;
-  }
-
-  if (current == null || result == null) {
-    return undefined;
-  }
-
-  return result;
+function getConfigsWithRegexes(configs: RouteConfig[]) {
+  return configs.map((c) => ({
+    ...c,
+    // Add `$` to the regex to make sure it matches till end of the path and not just beginning
+    // START FORK
+    // regex: c.regex ? new RegExp(c.regex.source + '$') : undefined,
+    regex: expo.configRegExp(c),
+    // END FORK
+  }));
 }
 
 const joinPaths = (...paths: string[]): string =>
@@ -263,6 +350,10 @@ const joinPaths = (...paths: string[]): string =>
 const matchAgainstConfigs = (remaining: string, configs: RouteConfig[]) => {
   let routes: ParsedRoute[] | undefined;
   let remainingPath = remaining;
+
+  // START FORK
+  const allParams = Object.create(null);
+  // END FORK
 
   // Go through all configs, and see if the next path segment matches our regex
   for (const config of configs) {
@@ -279,45 +370,27 @@ const matchAgainstConfigs = (remaining: string, configs: RouteConfig[]) => {
         matchedParams: Record<string, Record<string, string>>; // The extracted params
       }>(
         (acc, p, index) => {
-          if (!p.startsWith(':') && !p.startsWith('*')) {
+          if (!expo.isDynamicPart(p)) {
             return acc;
           }
 
-          if (p === '*') return acc;
-
-          // Path parameter so increment position for the segment
           acc.pos += 1;
 
-          // Start Fork
-          // const decodedParamSegment = decodeURIComponent(
-          //   // The param segments appear every second item starting from 2 in the regex match result
-          //   match![(acc.pos + 1) * 2]
-          //     // Remove trailing slash
-          //     .replace(/\/$/, '')
-          // );
-
-          // Object.assign(acc.matchedParams, {
-          //   [p]: Object.assign(acc.matchedParams[p] || {}, {
-          //     [index]: decodedParamSegment,
-          //   }),
-          // });
-
-          // Expo Router's regex is slightly different and may cause an undefined match
-          // The param segments appear every second item starting from 2 in the regex match result
-          let matchedParam = match![(acc.pos + 1) * 2];
-          if (!matchedParam) return acc;
-
-          // Remove trailing slash
-          matchedParam = matchedParam.replace(/\/$/, '');
-
-          const decodedParamSegment = decodeURIComponent(matchedParam);
+          // START FORK
+          const decodedParamSegment = expo.safelyDecodeURIComponent(
+            // const decodedParamSegment = decodeURIComponent(
+            // The param segments appear every second item starting from 2 in the regex match result
+            match![(acc.pos + 1) * 2]
+              // Remove trailing slash
+              .replace(/\/$/, '')
+          );
+          // END FORK
 
           Object.assign(acc.matchedParams, {
             [p]: Object.assign(acc.matchedParams[p] || {}, {
               [index]: decodedParamSegment,
             }),
           });
-          //  End Fork
 
           return acc;
         },
@@ -344,47 +417,46 @@ const matchAgainstConfigs = (remaining: string, configs: RouteConfig[]) => {
         const params = normalizedPath
           ?.split('/')
           .reduce<Record<string, unknown>>((acc, p, index) => {
-            if (!p.startsWith(':') && !p.startsWith('*')) {
+            if (!expo.isDynamicPart(p)) {
               return acc;
             }
 
             // Get the real index of the path parameter in the matched path
             // by offsetting by the number of segments in the initial pattern
             const offset = numInitialSegments ? numInitialSegments - 1 : 0;
-            const value = matchedParams[p]?.[index + offset];
+            // START FORK
+            // const value = matchedParams[p]?.[index + offset];
+            const value = expo.getParamValue(p, matchedParams[p]?.[index + offset]);
+            // END FORK
 
             if (value) {
-              const key = p.replace(/^[:*]/, '').replace(/\?$/, '');
-              acc[key] = routeConfig?.parse?.[key] ? routeConfig.parse[key](value) : value;
+              // START FORK
+              // const key = p.replace(/^:/, '').replace(/\?$/, '');
+              const key = expo.replacePart(p);
+              // END FORK
+              acc[key] = routeConfig?.parse?.[key] ? routeConfig.parse[key](value as any) : value;
             }
 
             return acc;
           }, {});
 
         if (params && Object.keys(params).length) {
+          Object.assign(allParams, params);
           return { name, params };
         }
 
         return { name };
       });
 
-      // Start Fork
-      // Combine all params so a route `[foo]/[bar]/other.js` has access to `{ foo, bar }`
-      // However this needs to be a cascading override. e.g /foo/:id/bar/:id. A layout at /foo/_layout will see the first :id
-      // TODO: This behavior is inherited from React Navigation. Do we want this behavior, or should we error?
-      const mergedParams = Object.assign({}, ...routes.map((route) => route.params));
-      if (Object.keys(mergedParams).length > 0) {
-        routes.forEach((route) => {
-          route.params = { ...mergedParams };
-        });
-      }
-      // End Fork
-
       remainingPath = remainingPath.replace(match[1], '');
 
       break;
     }
   }
+
+  // START FORK
+  expo.populateParams(routes, allParams);
+  // END FORK
 
   return { routes, remainingPath };
 };
@@ -409,18 +481,7 @@ const createNormalizedConfigs = (
     // If a string is specified as the value of the key(e.g. Foo: '/path'), use it as the pattern
     const pattern = parentPattern ? joinPaths(parentPattern, config) : config;
 
-    configs.push(
-      createConfigItem(
-        screen,
-        routeNames,
-        pattern,
-        config,
-        // Start fork
-        undefined,
-        false
-        // End fork
-      )
-    );
+    configs.push(createConfigItem(screen, routeNames, pattern, config));
   } else if (typeof config === 'object') {
     let pattern: string | undefined;
 
@@ -440,17 +501,7 @@ const createNormalizedConfigs = (
           : config.path || '';
 
       configs.push(
-        createConfigItem(
-          screen,
-          routeNames,
-          pattern!,
-          config.path,
-          config.parse,
-          // Start fork
-          config.screens ? !!Object.keys(config.screens)?.length : false,
-          config._route
-          // End fork
-        )
+        createConfigItem(screen, routeNames, pattern!, config.path, config.parse, config)
       );
     }
 
@@ -488,41 +539,25 @@ const createConfigItem = (
   routeNames: string[],
   pattern: string,
   path: string,
-  parse?: ParseConfig,
-  // Start fork
-  hasChildren?: boolean,
-  _route?: any
-  // End fork
+  parse: ParseConfig | undefined = undefined,
+  config: Record<string, any> = {}
 ): RouteConfig => {
   // Normalize pattern to remove any leading, trailing slashes, duplicate slashes etc.
-  const patternParts: string[] = [];
-  const parts: string[] = [];
-  let isDynamic = false;
-  const isIndex = screen === 'index' || screen.endsWith('/index');
-
-  for (const part of pattern.split('/')) {
-    if (part) {
-      patternParts.push(part);
-
-      // If any part is dynamic, then the route is dynamic
-      isDynamic ||= part.startsWith(':') || part.startsWith('*') || part.includes('*not-found');
-
-      if (!matchGroupName(part)) {
-        parts.push(part);
-      }
-    }
-  }
-
-  pattern = patternParts.join('/');
-
-  if (isIndex) {
-    parts.push('index');
-  }
-
-  const type = hasChildren ? 'layout' : isDynamic ? 'dynamic' : 'static';
+  pattern = pattern.split('/').filter(Boolean).join('/');
 
   const regex = pattern
-    ? new RegExp(`^(${pattern.split('/').map(formatRegexPattern).join('')})$`)
+    ? new RegExp(
+        `^(${pattern
+          .split('/')
+          .map((it) => {
+            if (it.startsWith(':')) {
+              return `(([^/]+\\/)${it.endsWith('?') ? '?' : ''})`;
+            }
+
+            return `${it === '*' ? '.*' : escape(it)}\\/`;
+          })
+          .join('')})`
+      )
     : undefined;
 
   return {
@@ -533,17 +568,9 @@ const createConfigItem = (
     // The routeNames array is mutated, so copy it to keep the current state
     routeNames: [...routeNames],
     parse,
-    // Start fork
-    type,
-    parts,
-    expandedRouteNames: routeNames.flatMap((name) => {
-      return name.split('/');
-    }),
-    userReadableName: [...routeNames.slice(0, -1), path || screen].join('/'),
-    hasChildren: !!hasChildren,
-    isIndex,
-    _route,
-    // End fork
+    // START FORK
+    ...expo.createConfig(screen, pattern, routeNames, config),
+    // END FORK
   };
 };
 
@@ -594,10 +621,7 @@ const createStateObject = (
     if (initialRoute) {
       return {
         index: 1,
-        // Start fork
-        // routes: [{ name: initialRoute }, route],
         routes: [{ name: initialRoute, params: route.params }, route],
-        // End fork
       };
     } else {
       return {
@@ -609,10 +633,7 @@ const createStateObject = (
       return {
         index: 1,
         routes: [
-          // Start fork
-          // { name: initialRoute },
           { name: initialRoute, params: route.params },
-          // End fork
           { ...route, state: { routes: [] } },
         ],
       };
@@ -625,14 +646,11 @@ const createStateObject = (
 };
 
 const createNestedStateObject = (
-  path: string,
+  { path, ...expoURL }: ReturnType<typeof expo.getUrlWithReactNavigationConcessions>,
   routes: ParsedRoute[],
   initialRoutes: InitialRouteConfig[],
   flatConfig?: RouteConfig[],
-  // Start Fork
-  hash?: string,
-  allowUrlParamNormalization?: boolean
-  // End fork
+  hash?: string
 ) => {
   let route = routes.shift() as ParsedRoute;
   const parentScreens: string[] = [];
@@ -666,38 +684,39 @@ const createNestedStateObject = (
   }
 
   route = findFocusedRoute(state) as ParsedRoute;
-  route.path = path;
+  // START FORK
+  route.path = expoURL.pathWithoutGroups;
+  // route.path = path;
+  // END FORK
 
-  const params = parseQueryParams(
+  // START FORK
+  // const params = parseQueryParams(
+  const params = expo.parseQueryParams(
     path,
+    route,
     flatConfig ? findParseConfigForRoute(route.name, flatConfig) : undefined,
     hash
   );
+  // END FORK
 
+  // START FORK
+  // expo.handleUrlParams(route, params, hash);
   if (params) {
-    // Start fork
-    // route.params = { ...route.params, ...params };
-    forks.mutateRouteParams(route, params, { allowUrlParamNormalization });
-    // End fork
+    route.params = { ...route.params, ...params };
   }
+  // END FORK
 
   return state;
 };
 
-// Start fork - this function was replaced
-// const parseQueryParams = (
-//   path: string,
-//   parseConfig?: Record<string, (value: string) => any>
-// ) => {
+// START FORK
+// const parseQueryParams = (path: string, parseConfig?: Record<string, (value: string) => any>) => {
 //   const query = path.split('?')[1];
 //   const params = queryString.parse(query);
 
 //   if (parseConfig) {
 //     Object.keys(params).forEach((name) => {
-//       if (
-//         Object.hasOwnProperty.call(parseConfig, name) &&
-//         typeof params[name] === 'string'
-//       ) {
+//       if (Object.hasOwnProperty.call(parseConfig, name) && typeof params[name] === 'string') {
 //         params[name] = parseConfig[name](params[name] as string);
 //       }
 //     });
@@ -705,257 +724,4 @@ const createNestedStateObject = (
 
 //   return Object.keys(params).length ? params : undefined;
 // };
-const parseQueryParams = forks.parseQueryParams;
-// End fork
-
-// Start Fork
-const baseUrlCache = new Map<string, RegExp>();
-export function stripBaseUrl(
-  path: string,
-  baseUrl: string | undefined = process.env.EXPO_BASE_URL
-) {
-  if (process.env.NODE_ENV !== 'development') {
-    if (baseUrl) {
-      const reg = getBaseUrlRegex(baseUrl);
-      return path.replace(/^\/+/g, '/').replace(reg, '');
-    }
-  }
-  return path;
-}
-
-function getBaseUrlRegex(baseUrl: string) {
-  if (baseUrlCache.has(baseUrl)) {
-    return baseUrlCache.get(baseUrl)!;
-  }
-  const regex = new RegExp(`^\\/?${escape(baseUrl)}`, 'g');
-  baseUrlCache.set(baseUrl, regex);
-  return regex;
-}
-// End Fork
-
-// Start Fork
-export function getExpoHelpers(
-  path: string,
-  baseUrl: string | undefined = process.env.EXPO_BASE_URL
-) {
-  const expoURL = getUrlWithReactNavigationConcessions(path, baseUrl);
-
-  if (!expoURL.url) {
-    return;
-  }
-
-  let cleanPath =
-    stripBaseUrl(stripGroupSegmentsFromPath(expoURL.url.pathname), baseUrl) + expoURL.url.search;
-
-  if (!path.startsWith('/')) cleanPath = cleanPath.slice(1);
-
-  return {
-    cleanPath,
-    hash: expoURL.url.hash.slice(1),
-    ...expoURL,
-  };
-}
-// End Fork
-
-// Start Fork
-export function getUrlWithReactNavigationConcessions(path: string, baseUrl?: string) {
-  let parsed: URL;
-  try {
-    parsed = new URL(path, 'https://phony.example');
-  } catch {
-    // Do nothing with invalid URLs.
-    return {
-      nonstandardPathname: '',
-      inputPathnameWithoutHash: '',
-      url: null,
-    };
-  }
-
-  const pathname = parsed.pathname;
-
-  // Make sure there is a trailing slash
-  return {
-    // The slashes are at the end, not the beginning
-    nonstandardPathname:
-      stripBaseUrl(pathname, baseUrl).replace(/^\/+/g, '').replace(/\/+$/g, '') + '/',
-    url: parsed,
-  };
-}
-// End Fork
-
-// Start fork
-function formatRegexPattern(it: string): string {
-  // Allow spaces in file path names.
-  it = it.replace(' ', '%20');
-
-  if (it.startsWith(':')) {
-    // TODO: Remove unused match group
-    return `(([^/]+\\/)${it.endsWith('?') ? '?' : ''})`;
-  } else if (it.startsWith('*')) {
-    return `((.*\\/)${it.endsWith('?') ? '?' : ''})`;
-  }
-
-  // Strip groups from the matcher
-  if (matchGroupName(it) != null) {
-    // Groups are optional segments
-    // this enables us to match `/bar` and `/(foo)/bar` for the same route
-    // NOTE(EvanBacon): Ignore this match in the regex to avoid capturing the group
-    return `(?:${escape(it)}\\/)?`;
-  }
-
-  return escape(it) + `\\/`;
-}
-// End Fork
-
-// Start Fork
-function getSortConfigsFn(previousSegments: string[] = []) {
-  return function sortConfigs(a: RouteConfig, b: RouteConfig): number {
-    // Sort config so that:
-    // - the most exhaustive ones are always at the beginning
-    // - patterns with wildcard are always at the end
-
-    // If 2 patterns are same, move the one with less route names up
-    // This is an error state, so it's only useful for consistent error messages
-    if (a.pattern === b.pattern) {
-      return b.routeNames.join('>').localeCompare(a.routeNames.join('>'));
-    }
-
-    /*
-     * If one of the patterns starts with the other, it is earlier in the config sorting.
-     * However, configs are a mix of route configs and layout configs
-     * e.g There will be a config for `/(group)`, but maybe there isn't a `/(group)/index.tsx`
-     *
-     * This is because you can navigate to a directory and its navigator will determine the route
-     * These routes should be later in the config sorting, as their patterns are very open
-     * and will prevent routes from being matched
-     *
-     * Therefore before we compare segment parts, we force these layout configs later in the sorting
-     *
-     * NOTE(marklawlor): Is this a feature we want? I'm unsure if this is a gimmick or a feature.
-     */
-    if (a.pattern.startsWith(b.pattern) && !b.isIndex) {
-      return -1;
-    }
-
-    if (b.pattern.startsWith(a.pattern) && !a.isIndex) {
-      return 1;
-    }
-
-    /*
-     * Static routes should always be higher than dynamic and layout routes.
-     */
-    if (a.type === 'static' && b.type !== 'static') {
-      return -1;
-    } else if (a.type !== 'static' && b.type === 'static') {
-      return 1;
-    }
-
-    /*
-     * If both are static/dynamic or a layout file, then we check group similarity
-     */
-    const similarToPreviousA = previousSegments.filter((value, index) => {
-      return value === a.expandedRouteNames[index] && value.startsWith('(') && value.endsWith(')');
-    });
-
-    const similarToPreviousB = previousSegments.filter((value, index) => {
-      return value === b.expandedRouteNames[index] && value.startsWith('(') && value.endsWith(')');
-    });
-
-    if (
-      (similarToPreviousA.length > 0 || similarToPreviousB.length > 0) &&
-      similarToPreviousA.length !== similarToPreviousB.length
-    ) {
-      // One matches more than the other, so pick the one that matches more
-      return similarToPreviousB.length - similarToPreviousA.length;
-    }
-
-    /*
-     * If there is not difference in similarity, then each non-group segment is compared against each other
-     */
-    for (let i = 0; i < Math.max(a.parts.length, b.parts.length); i++) {
-      // if b is longer, b get higher priority
-      if (a.parts[i] == null) {
-        return 1;
-      }
-      // if a is longer, a get higher priority
-      if (b.parts[i] == null) {
-        return -1;
-      }
-
-      const aWildCard = a.parts[i].startsWith('*');
-      const bWildCard = b.parts[i].startsWith('*');
-      // if both are wildcard we compare next component
-      if (aWildCard && bWildCard) {
-        const aNotFound = a.parts[i].match(/^[*]not-found$/);
-        const bNotFound = b.parts[i].match(/^[*]not-found$/);
-
-        if (aNotFound && bNotFound) {
-          continue;
-        } else if (aNotFound) {
-          return 1;
-        } else if (bNotFound) {
-          return -1;
-        }
-        continue;
-      }
-      // if only a is wild card, b get higher priority
-      if (aWildCard) {
-        return 1;
-      }
-      // if only b is wild card, a get higher priority
-      if (bWildCard) {
-        return -1;
-      }
-
-      const aSlug = a.parts[i].startsWith(':');
-      const bSlug = b.parts[i].startsWith(':');
-      // if both are wildcard we compare next component
-      if (aSlug && bSlug) {
-        const aNotFound = a.parts[i].match(/^[*]not-found$/);
-        const bNotFound = b.parts[i].match(/^[*]not-found$/);
-
-        if (aNotFound && bNotFound) {
-          continue;
-        } else if (aNotFound) {
-          return 1;
-        } else if (bNotFound) {
-          return -1;
-        }
-
-        continue;
-      }
-      // if only a is wild card, b get higher priority
-      if (aSlug) {
-        return 1;
-      }
-      // if only b is wild card, a get higher priority
-      if (bSlug) {
-        return -1;
-      }
-    }
-
-    /*
-     * Both configs are identical in specificity and segments count/type
-     * Try and sort by initial instead.
-     *
-     * TODO: We don't differentiate between the default initialRoute and group specific default routes
-     *
-     * const unstable_settings = {
-     *   "group": {
-     *     initialRouteName: "article"
-     *  }
-     * }
-     *
-     * "article" will be ranked higher because its an initialRoute for a group - even if not your not currently in
-     * that group. The current work around is to ways provide initialRouteName for all groups
-     */
-    if (a.isInitial && !b.isInitial) {
-      return -1;
-    } else if (!a.isInitial && b.isInitial) {
-      return 1;
-    }
-
-    return b.parts.length - a.parts.length;
-  };
-}
-// End fork
+// END FORK

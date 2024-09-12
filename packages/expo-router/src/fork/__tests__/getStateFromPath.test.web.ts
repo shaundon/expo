@@ -1,10 +1,7 @@
 import { getMockConfig } from '../../testing-library';
 import { getPathFromState } from '../getPathFromState';
-import {
-  getStateFromPath,
-  getUrlWithReactNavigationConcessions,
-  stripBaseUrl,
-} from '../getStateFromPath';
+import { getStateFromPath } from '../getStateFromPath';
+import { getUrlWithReactNavigationConcessions, stripBaseUrl } from '../getStateFromPath-forks';
 
 beforeEach(() => {
   delete process.env.EXPO_BASE_URL;
@@ -115,7 +112,7 @@ describe('hash', () => {
       routes: [
         {
           name: 'hello',
-          path: '/hello',
+          path: '/hello#123',
           params: {
             '#': '123',
           },
@@ -133,7 +130,7 @@ describe('hash', () => {
             hello: 'hello',
             '#': '123',
           },
-          path: '/hello',
+          path: '/hello#123',
         },
       ],
     });
@@ -144,7 +141,7 @@ describe('hash', () => {
       routes: [
         {
           name: 'index',
-          path: '/',
+          path: '/?#123',
           params: {
             '#': '123',
           },
@@ -293,7 +290,7 @@ it(`handles not-found routes`, () => {
       {
         name: '+not-found',
         params: {
-          'not-found': 'missing-page',
+          'not-found': ['missing-page'],
         },
         path: '/missing-page',
       },
@@ -347,46 +344,5 @@ it(`prioritizes hoisted index routes over dynamic groups`, () => {
         path: '',
       },
     ],
-  });
-});
-
-describe('forked upstream tests', () => {
-  // Expo Router changes this functionality so all segments see the last :id
-  test('resolves nested path params with same name to correct screen', () => {
-    const path = '/foo/42/bar/43';
-
-    const config = {
-      initialRouteName: 'Foo',
-      screens: {
-        Foo: {
-          path: 'foo/:id',
-          screens: {
-            Bar: {
-              path: 'bar/:id',
-            },
-          },
-        },
-      },
-    };
-
-    const state = {
-      routes: [
-        {
-          name: 'Foo',
-          params: { id: '43' },
-          state: {
-            routes: [
-              {
-                name: 'Bar',
-                params: { id: '43' },
-                path,
-              },
-            ],
-          },
-        },
-      ],
-    };
-
-    expect(getStateFromPath<object>(path, config)).toEqual(state);
   });
 });

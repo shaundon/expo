@@ -120,15 +120,19 @@ export function useLinking(
     getActionFromStateRef.current = getActionFromState;
   });
 
-  const getStateFromURL = React.useCallback((url: string | null | undefined) => {
-    if (!url || (filterRef.current && !filterRef.current(url))) {
-      return undefined;
-    }
+  const getStateFromURL = React.useCallback(
+    (url: string | null | undefined) => {
+      if (!url || (filterRef.current && !filterRef.current(url))) {
+        return undefined;
+      }
 
-    const path = extractExpoPathFromURL(prefixesRef.current, url);
+      const path = extractExpoPathFromURL(prefixesRef.current, url);
 
-    return path !== undefined ? getStateFromPathRef.current(path, configRef.current) : undefined;
-  }, []);
+      return path !== undefined ? getStateFromPathRef.current(path, configRef.current) : undefined;
+    },
+
+    []
+  );
 
   const getInitialState = React.useCallback(() => {
     let state: ResultState | undefined;

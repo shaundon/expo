@@ -2847,6 +2847,7 @@ test('throws when invalid properties are specified in the config', () => {
 test('encodes special characters in params', () => {
   const paramWithValidSymbols = `User09-A_Z~!$&'()*+,;=:@__`;
   const invalidSymbols = '#?[]{}%<>||';
+  // const invalidSymbols = '#?[]{}%<>||';
   const queryString = 'user#email@gmail.com=2&4';
 
   const path = `users/id/${paramWithValidSymbols}${encodeURIComponent(invalidSymbols)}?query=${encodeURIComponent(queryString)}`;

@@ -765,7 +765,8 @@ it('can replace across groups', async () => {
     'two/screen': () => <Text testID="two/screen" />,
   });
 
-  expect(screen).toHavePathname('/');
+  // THere is no index route
+  expect(screen).toHavePathname('/+not-found');
 
   // Go to one
   act(() => router.push('/one/screen'));
@@ -1244,7 +1245,7 @@ describe('consistent url encoding', () => {
 
     act(() => router.push('/start%20end'));
 
-    expect(screen).toHavePathname('/start%20end');
+    expect(screen).toHavePathname('/start end');
     expect(screen).toHaveSearchParams({
       param: 'start end',
     });
@@ -1258,7 +1259,7 @@ describe('consistent url encoding', () => {
 
     act(() => router.back());
 
-    expect(screen).toHavePathname('/start%20end');
+    expect(screen).toHavePathname('/start end');
     expect(screen).toHaveSearchParams({
       param: 'start end',
     });
@@ -1465,10 +1466,10 @@ it('respects nested unstable settings', async () => {
   });
 
   expect(screen.getByTestId('index')).toBeVisible();
-  fireEvent.press(screen.getByText('Search'));
+  fireEvent.press(screen.getByText('Search'), {});
   expect(screen.getByTestId('search')).toBeVisible();
-  fireEvent.press(screen.getByText('Profile'));
+  fireEvent.press(screen.getByText('Profile'), {});
   expect(screen.getByTestId('profile')).toBeVisible();
-  fireEvent.press(screen.getByText('Home'));
+  fireEvent.press(screen.getByText('Home'), {});
   expect(screen.getByTestId('index')).toBeVisible();
 });
