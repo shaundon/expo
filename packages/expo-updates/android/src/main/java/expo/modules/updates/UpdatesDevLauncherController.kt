@@ -108,6 +108,14 @@ class UpdatesDevLauncherController(
     launcher = null
   }
 
+  override fun getRuntimeVersion(context: Context): String? {
+    return updatesConfiguration?.getRuntimeVersion()
+  }
+
+  override fun getUpdateUrl(context: Context): String? {
+    return updatesConfiguration?.updateUrl?.toString()
+  }
+
   /**
    * Fetch an update using a dynamically generated configuration object (including a potentially
    * different update URL than the one embedded in the build).

@@ -60,10 +60,10 @@ class DevLauncherInternalModule(reactContext: ReactApplicationContext?) :
   private fun getUpdatesConfig(): WritableMap {
     val map = Arguments.createMap()
 
-    val runtimeVersion = DevLauncherController.getMetadataValue(reactApplicationContext, "expo.modules.updates.EXPO_RUNTIME_VERSION")
-    var projectUrl = DevLauncherController.getMetadataValue(reactApplicationContext, "expo.modules.updates.EXPO_UPDATE_URL")
+    val runtimeVersion = controller.updatesInterface?.getRuntimeVersion(reactApplicationContext)
+    val projectUrl = controller.updatesInterface?.getUpdateUrl(reactApplicationContext)
 
-    val appId = if (projectUrl.isNotEmpty()) {
+    val appId = if (projectUrl !== null && projectUrl.isNotEmpty()) {
       Uri.parse(projectUrl).lastPathSegment ?: ""
     } else {
       ""
@@ -231,15 +231,14 @@ class DevLauncherInternalModule(reactContext: ReactApplicationContext?) :
     val packageInfo = packageManager.getPackageInfo(packageName, 0)
     val applicationInfo = packageManager.getApplicationInfo(packageName, PackageManager.GET_META_DATA)
     val appName = packageManager.getApplicationLabel(applicationInfo).toString()
-    val runtimeVersion = DevLauncherController.getMetadataValue(reactApplicationContext, "expo.modules.updates.EXPO_RUNTIME_VERSION")
-    var appIcon = getApplicationIconUri()
+    val runtimeVersion = controller.updatesInterface?.getRuntimeVersion(reactApplicationContext)
+    val appIcon = getApplicationIconUri()
 
-    var updatesUrl = DevLauncherController.getMetadataValue(reactApplicationContext, "expo.modules.updates.EXPO_UPDATE_URL")
-    var appId = ""
-
-    if (updatesUrl.isNotEmpty()) {
-      var uri = Uri.parse(updatesUrl)
-      appId = uri.lastPathSegment ?: ""
+    val updatesUrl = controller.updatesInterface?.getUpdateUrl(reactApplicationContext)
+    val appId = if (updatesUrl !== null && updatesUrl.isNotEmpty()) {
+      Uri.parse(updatesUrl).lastPathSegment ?: ""
+    } else {
+      ""
     }
 
     map.apply {
