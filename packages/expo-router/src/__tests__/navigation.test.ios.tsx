@@ -1124,7 +1124,7 @@ describe('consistent url encoding', () => {
     );
 
     const component = screen.getByTestId('id');
-    expect(screen).toHavePathname('/start%25end');
+    expect(screen).toHavePathname('/start%end');
     expect(screen).toHaveSearchParams({ param: 'start%end' });
     expect(component).toHaveTextContent(
       JSON.stringify({ local: { param: 'start%end' }, global: { param: 'start%end' } })

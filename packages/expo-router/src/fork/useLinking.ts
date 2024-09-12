@@ -395,7 +395,7 @@ export function useLinking(
 
             // Store the updated state as well as fix the path if incorrect
             history.replace({ path, state });
-          } catch (e) {
+          } catch {
             // The navigation was interrupted
           }
         } else {

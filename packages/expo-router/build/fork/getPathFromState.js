@@ -23,9 +23,9 @@ var __importStar = (this && this.__importStar) || function (mod) {
     return result;
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.appendBaseUrl = exports.decodeParams = exports.getPathDataFromState = exports.getPathFromState = void 0;
-const native_1 = require("@react-navigation/native");
-const queryString = __importStar(require("query-string"));
+exports.getPathDataFromState = exports.getPathFromState = void 0;
+const expo = __importStar(require("./getPathFromState-forks"));
+// END FORK
 const getActiveRoute = (state) => {
     const route = typeof state.index === 'number'
         ? state.routes[state.index]
@@ -35,6 +35,10 @@ const getActiveRoute = (state) => {
     }
     return route;
 };
+let cachedNormalizedConfigs = [
+    undefined,
+    {},
+];
 /**
  * Utility to serialize a navigation state object to a path string.
  *
@@ -68,21 +72,27 @@ function getPathFromState(state, options) {
     return getPathDataFromState(state, options).path;
 }
 exports.getPathFromState = getPathFromState;
-function getPathDataFromState(state, { preserveDynamicRoutes, preserveGroups, ...options } = { screens: {} }) {
+function getPathDataFromState(state, options) {
     if (state == null) {
         throw Error("Got 'undefined' for the navigation state. You must pass a valid state object.");
     }
     if (options) {
-        (0, native_1.validatePathConfig)(options);
+        // START FORK
+        expo.validatePathConfig(options);
+        // validatePathConfig(options);
+        // END FORK
     }
     // Create a normalized configs object which will be easier to use
-    const configs = options?.screens
-        ? createNormalizedConfigs(options?.screens)
-        : {};
+    if (cachedNormalizedConfigs[0] !== options?.screens) {
+        cachedNormalizedConfigs = [
+            options?.screens,
+            options?.screens ? createNormalizedConfigs(options.screens) : {},
+        ];
+    }
+    const configs = cachedNormalizedConfigs[1];
     let path = '/';
     let current = state;
     const allParams = {};
-    let hash;
     while (current) {
         let index = typeof current.index === 'number' ? current.index : 0;
         let route = current.routes[index];
@@ -97,46 +107,30 @@ function getPathDataFromState(state, { preserveDynamicRoutes, preserveGroups, ..
             pattern = currentOptions[route.name].pattern;
             nestedRouteNames.push(route.name);
             if (route.params) {
-                // Start Fork
-                if (route.params['#'] !== undefined) {
-                    // route.params is frozen, so we need to clone it
-                    const { '#': _hash, ...params } = route.params;
-                    hash = _hash;
-                    // route.params is readonly, so we need to make it a new object
-                    // But we cannot change its identity as its used below
-                    Object.assign(route, { params });
-                }
-                // End Fork
                 const stringify = currentOptions[route.name]?.stringify;
-                const currentParams = Object.fromEntries(
-                // Start fork - better handle array params
-                // Object.entries(route.params).map(([key, value]) => [
-                //   key,
-                //   stringify?.[key] ? stringify[key](value) : String(value),
-                // ])
-                Object.entries(route.params).map(([key, value]) => [
-                    key,
-                    stringify?.[key]
-                        ? stringify[key](value)
-                        : Array.isArray(value)
-                            ? value.map(String)
-                            : String(value),
-                ])
-                // End Fork
-                );
-                if (pattern) {
-                    Object.assign(allParams, currentParams);
-                }
+                // START FORK
+                // This mutates allParams
+                const currentParams = expo.fixCurrentParams(allParams, route, stringify);
+                // const currentParams = Object.fromEntries(
+                //   Object.entries(route.params).map(([key, value]) => [
+                //     key,
+                //     stringify?.[key] ? stringify[key](value) : String(value),
+                //   ])
+                // );
+                // if (pattern) {
+                //   Object.assign(allParams, currentParams);
+                // }
+                // END FORK
                 if (focusedRoute === route) {
                     // If this is the focused route, keep the params for later use
                     // We save it here since it's been stringified already
                     focusedParams = { ...currentParams };
                     pattern
                         ?.split('/')
-                        .filter((p) => p.startsWith(':'))
+                        .filter((p) => expo.isDynamicPart(p))
                         // eslint-disable-next-line no-loop-func
                         .forEach((p) => {
-                        const name = getParamName(p);
+                        const name = expo.getParamName(p);
                         // Remove the params present in the pattern since we'll only use the rest for query string
                         if (focusedParams) {
                             // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
@@ -147,7 +141,24 @@ function getPathDataFromState(state, { preserveDynamicRoutes, preserveGroups, ..
             }
             // If there is no `screens` property or no nested state, we return pattern
             if (!currentOptions[route.name].screens || route.state === undefined) {
-                hasNext = false;
+                // START FORK
+                // Expo Router can end up in some configs that React Navigation doesn't seem to support
+                // We can get around this by providing a fake state
+                const screens = currentOptions[route.name].screens;
+                const screen = route.params && 'screen' in route.params
+                    ? route.params.screen?.toString()
+                    : screens
+                        ? Object.keys(screens)[0]
+                        : undefined;
+                if (screen && screens && currentOptions[route.name].screens?.[screen]) {
+                    route = { ...screens[screen], name: screen, key: screen };
+                    currentOptions = screens;
+                }
+                else {
+                    hasNext = false;
+                }
+                // hasNext = false;
+                // END FORK
             }
             else {
                 index =
@@ -169,30 +180,41 @@ function getPathDataFromState(state, { preserveDynamicRoutes, preserveGroups, ..
             pattern = nestedRouteNames.join('/');
         }
         if (currentOptions[route.name] !== undefined) {
-            path += pattern
-                .split('/')
-                .map((p) => {
-                const name = getParamName(p);
-                // We don't know what to show for wildcard patterns
-                // Showing the route name seems ok, though whatever we show here will be incorrect
-                // Since the page doesn't actually exist
-                if (p === '*') {
-                    return route.name;
-                }
-                // If the path has a pattern for a param, put the param in the path
-                if (p.startsWith(':')) {
-                    const value = allParams[name];
-                    if (value === undefined && p.endsWith('?')) {
-                        // Optional params without value assigned in route.params should be ignored
-                        return '';
-                    }
-                    // Valid characters according to
-                    // https://datatracker.ietf.org/doc/html/rfc3986#section-3.3 (see pchar definition)
-                    return String(value).replace(/[^A-Za-z0-9\-._~!$&'()*+,;=:@]/g, (char) => encodeURIComponent(char));
-                }
-                return encodeURIComponent(p);
-            })
-                .join('/');
+            // START FORK
+            path += expo.getPathWithConventionsCollapsed({
+                ...options,
+                pattern,
+                route,
+                params: allParams,
+                initialRouteName: configs[route.name]?.initialRouteName,
+            });
+            // path += pattern
+            //   .split('/')
+            //   .map((p) => {
+            //     const name = getParamName(p);
+            //     // We don't know what to show for wildcard patterns
+            //     // Showing the route name seems ok, though whatever we show here will be incorrect
+            //     // Since the page doesn't actually exist
+            //     if (p === '*') {
+            //       return route.name;
+            //     }
+            //     // If the path has a pattern for a param, put the param in the path
+            //     if (p.startsWith(':')) {
+            //       const value = allParams[name];
+            //       if (value === undefined && p.endsWith('?')) {
+            //         // Optional params without value assigned in route.params should be ignored
+            //         return '';
+            //       }
+            //       // Valid characters according to
+            //       // https://datatracker.ietf.org/doc/html/rfc3986#section-3.3 (see pchar definition)
+            //       return String(value).replace(/[^A-Za-z0-9\-._~!$&'()*+,;=:@]/g, (char) =>
+            //         encodeURIComponent(char)
+            //       );
+            //     }
+            //     return encodeURIComponent(p);
+            //   })
+            //   .join('/');
+            // END FORK
         }
         else {
             path += encodeURIComponent(route.name);
@@ -210,14 +232,13 @@ function getPathDataFromState(state, { preserveDynamicRoutes, preserveGroups, ..
                     delete focusedParams[param];
                 }
             }
-            // Start Fork
+            // START FORK
+            path = expo.appendQueryAndHash(path, focusedParams);
             // const query = queryString.stringify(focusedParams, { sort: false });
-            const { '#': hash, ...focusedParamsWithoutHash } = focusedParams;
-            const query = queryString.stringify(focusedParamsWithoutHash, { sort: false });
-            // End Fork
-            if (query) {
-                path += `?${query}`;
-            }
+            // if (query) {
+            //   path += `?${query}`;
+            // }
+            // END FORK
         }
         current = route.state;
     }
@@ -228,36 +249,15 @@ function getPathDataFromState(state, { preserveDynamicRoutes, preserveGroups, ..
     if (options?.path) {
         path = joinPaths(options.path, path);
     }
-    if (hash) {
-        allParams['#'] = hash;
-        path += `#${hash}`;
-    }
-    path = appendBaseUrl(path);
+    // START FORK
+    path = expo.appendBaseUrl(path);
+    // END FORK
+    // START FORK
     return { path, params: allParams };
+    // END FORK
 }
 exports.getPathDataFromState = getPathDataFromState;
-function decodeParams(params) {
-    const parsed = {};
-    for (const [key, value] of Object.entries(params)) {
-        try {
-            if (key === 'params' && typeof value === 'object') {
-                parsed[key] = decodeParams(value);
-            }
-            else if (Array.isArray(value)) {
-                parsed[key] = value.map((v) => decodeURIComponent(v));
-            }
-            else {
-                parsed[key] = decodeURIComponent(value);
-            }
-        }
-        catch {
-            parsed[key] = value;
-        }
-    }
-    return parsed;
-}
-exports.decodeParams = decodeParams;
-const getParamName = (pattern) => pattern.replace(/^:/, '').replace(/\?$/, '');
+// const getParamName = (pattern: string) => pattern.replace(/^:/, '').replace(/\?$/, '');
 const joinPaths = (...paths) => []
     .concat(...paths.map((p) => p.split('/')))
     .filter(Boolean)
@@ -286,13 +286,4 @@ const createNormalizedConfigs = (options, pattern) => Object.fromEntries(Object.
     const result = createConfigItem(c, pattern);
     return [name, result];
 }));
-function appendBaseUrl(path, baseUrl = process.env.EXPO_BASE_URL) {
-    if (process.env.NODE_ENV !== 'development') {
-        if (baseUrl) {
-            return `/${baseUrl.replace(/^\/+/, '').replace(/\/$/, '')}${path}`;
-        }
-    }
-    return path;
-}
-exports.appendBaseUrl = appendBaseUrl;
 //# sourceMappingURL=getPathFromState.js.map

@@ -37,6 +37,7 @@ const routing_1 = require("./routing");
 const sort_routes_1 = require("./sort-routes");
 const LocationProvider_1 = require("../LocationProvider");
 const getPathFromState_1 = require("../fork/getPathFromState");
+// import { ResultState } from '../fork/getStateFromPath';
 const getLinkingConfig_1 = require("../getLinkingConfig");
 const getRoutes_1 = require("../getRoutes");
 const useScreens_1 = require("../useScreens");
@@ -174,6 +175,7 @@ class RouterStore {
                 ...this.linking?.config,
                 preserveDynamicRoutes: asPath,
                 preserveGroups: asPath,
+                shouldEncodeURISegment: false,
             });
         }, state);
     }

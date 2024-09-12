@@ -1,13 +1,13 @@
 import { PathConfigMap } from '@react-navigation/native';
 import type { NavigationState, PartialState } from '@react-navigation/routers';
-type Options<ParamList extends object> = {
+import type { ExpoOptions } from './getPathFromState-forks';
+export type Options<ParamList extends object> = ExpoOptions & {
     path?: string;
     initialRouteName?: string;
     screens: PathConfigMap<ParamList>;
-    preserveDynamicRoutes?: boolean;
-    preserveGroups?: boolean;
 };
 export type State = NavigationState | Omit<PartialState<NavigationState>, 'stale'>;
+export type StringifyConfig = Record<string, (value: any) => string>;
 /**
  * Utility to serialize a navigation state object to a path string.
  *
@@ -38,11 +38,8 @@ export type State = NavigationState | Omit<PartialState<NavigationState>, 'stale
  * @returns Path representing the state, e.g. /foo/bar?count=42.
  */
 export declare function getPathFromState<ParamList extends object>(state: State, options?: Options<ParamList>): string;
-export declare function getPathDataFromState<ParamList extends object>(state: State, { preserveDynamicRoutes, preserveGroups, ...options }?: Options<ParamList>): {
+export declare function getPathDataFromState<ParamList extends object>(state: State, options?: Options<ParamList>): {
     path: string;
     params: Record<string, any>;
 };
-export declare function decodeParams(params: Record<string, string>): Record<string, any>;
-export declare function appendBaseUrl(path: string, baseUrl?: string | undefined): string;
-export {};
 //# sourceMappingURL=getPathFromState.d.ts.map

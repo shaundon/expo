@@ -313,7 +313,7 @@ function useLinking(ref, { enabled = true, config, getStateFromPath = core_1.get
                         // Store the updated state as well as fix the path if incorrect
                         history.replace({ path, state });
                     }
-                    catch (e) {
+                    catch {
                         // The navigation was interrupted
                     }
                 }

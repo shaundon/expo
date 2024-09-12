@@ -1,11 +1,24 @@
 import { PathConfigMap } from '@react-navigation/native';
 import type { NavigationState, PartialState } from '@react-navigation/routers';
+import type { ExpoOptions, ExpoRouteConfig } from './getStateFromPath-forks';
 import { RouterStore } from '../global-state/router-store';
-type Options<ParamList extends object> = {
+export type Options<ParamList extends object> = ExpoOptions & {
     path?: string;
     initialRouteName?: string;
     screens: PathConfigMap<ParamList>;
-    allowUrlParamNormalization?: boolean;
+};
+type ParseConfig = Record<string, (value: string) => any>;
+export type RouteConfig = ExpoRouteConfig & {
+    screen: string;
+    regex?: RegExp;
+    path: string;
+    pattern: string;
+    routeNames: string[];
+    parse?: ParseConfig;
+};
+export type InitialRouteConfig = {
+    initialRouteName: string;
+    parentScreens: string[];
 };
 export type ResultState = PartialState<NavigationState> & {
     state?: ResultState;
@@ -37,22 +50,5 @@ export type ParsedRoute = {
  * @param options Extra options to fine-tune how to parse the path.
  */
 export declare function getStateFromPath<ParamList extends object>(this: RouterStore | undefined | void, path: string, options?: Options<ParamList>): ResultState | undefined;
-export declare function stripBaseUrl(path: string, baseUrl?: string | undefined): string;
-export declare function getExpoHelpers(path: string, baseUrl?: string | undefined): {
-    nonstandardPathname: string;
-    url: URL;
-    inputPathnameWithoutHash?: undefined;
-    cleanPath: string;
-    hash: string;
-} | undefined;
-export declare function getUrlWithReactNavigationConcessions(path: string, baseUrl?: string): {
-    nonstandardPathname: string;
-    inputPathnameWithoutHash: string;
-    url: null;
-} | {
-    nonstandardPathname: string;
-    url: URL;
-    inputPathnameWithoutHash?: undefined;
-};
 export {};
 //# sourceMappingURL=getStateFromPath.d.ts.map
